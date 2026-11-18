@@ -1,6 +1,6 @@
 # PhishGuard AI: implementation steps
 
-Next step: **1.1**
+Next step: **1.4**
 
 Tags: [P] use Planning mode. [F] Fast mode is fine. [H] human step, not for the agent.
 "design §x" means a section of docs/design.md. Tick `[x]` when a step is done and committed.
@@ -11,9 +11,9 @@ Run one step (or one bundle) per fresh conversation. Suggested bundles, to save 
 
 ## Phase 1: Skeleton
 
-- [ ] 1.1 [F] Scaffold: backend/app/__init__.py (create_app), config.py (env vars, fail fast unless ENV=test), requirements.txt (pinned), .env.example (names only), tests/conftest.py. Done: pytest runs.
-- [ ] 1.2 [P] Errors: errors.py with the design §3 error shape and §7 codes; handlers for 400/401/403/404/405/409/422/429 and unexpected errors (no stack traces); X-Request-Id on every response and error body. Done: tests for 404, 405, 500 shapes.
-- [ ] 1.3 [F] APIFlask app: GET /api/v1/health (status, version, time; no DB), /docs, /openapi.json, ApiKeyAuth scheme (header X-API-Key). Done: test passes, /docs loads locally.
+- [x] 1.1 [F] Scaffold: backend/app/__init__.py (create_app), config.py (env vars, fail fast unless ENV=test), requirements.txt (pinned), .env.example (names only), tests/conftest.py. Done: pytest runs.
+- [x] 1.2 [P] Errors: errors.py with the design §3 error shape and §7 codes; handlers for 400/401/403/404/405/409/422/429 and unexpected errors (no stack traces); X-Request-Id on every response and error body. Done: tests for 404, 405, 500 shapes.
+- [x] 1.3 [F] APIFlask app: GET /api/v1/health (status, version, time; no DB), /docs, /openapi.json, ApiKeyAuth scheme (header X-API-Key). Done: test passes, /docs loads locally.
 - [ ] 1.4 [P] Vercel files per Vercel's CURRENT Flask docs (look them up), vercel.json if required, README run steps. Done: [H] I deploy; live /api/v1/health returns 200.
 
 ## Phase 2: Data layer
