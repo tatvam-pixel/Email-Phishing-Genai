@@ -5,3 +5,5 @@ node_modules/
 *.joblib
 ml/data/
 .vercel/
+.env.*
+!.env.example
