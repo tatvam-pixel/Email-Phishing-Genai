@@ -12,8 +12,10 @@ from sqlalchemy import text  # noqa: E402
 from app import create_app  # noqa: E402
 from app.db import get_engine, validate_test_db_url  # noqa: E402
 
-# Allow importing scripts/migrate.py
+# Allow importing app and scripts/migrate.py from any directory
 _BACKEND_DIR = Path(__file__).resolve().parent.parent
+if str(_BACKEND_DIR) not in sys.path:
+    sys.path.insert(0, str(_BACKEND_DIR))
 _SCRIPTS_DIR = _BACKEND_DIR / "scripts"
 if str(_SCRIPTS_DIR) not in sys.path:
     sys.path.insert(0, str(_SCRIPTS_DIR))

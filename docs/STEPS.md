@@ -1,6 +1,6 @@
 # PhishGuard AI: implementation steps
 
-Next step: **2.1**
+Next step: **2.3**
 
 Tags: [P] use Planning mode. [F] Fast mode is fine. [H] human step, not for the agent.
 "design §x" means a section of docs/design.md. Tick `[x]` when a step is done and committed.
@@ -18,8 +18,8 @@ Run one step (or one bundle) per fresh conversation. Suggested bundles, to save 
 
 ## Phase 2: Data layer
 
-- [ ] 2.1 [P] db.py: SQLAlchemy engine for serverless (Supabase transaction pooler, no persistent pool, prepared statements off; verify in docs). scripts/migrate.py: schema_migrations table, applies db/schema.sql once as 000_baseline, then db/migrations/*.sql in order, idempotent. Done: runs twice cleanly on the test DB.
-- [ ] 2.2 [P] Test fixtures: connect to TEST_DATABASE_URL, apply migrations, truncate between tests; refuse if it is empty or equals DATABASE_URL. Done: test proving the refusal.
+- [x] 2.1 [P] db.py: SQLAlchemy engine for serverless (Supabase transaction pooler, no persistent pool, prepared statements off; verify in docs). scripts/migrate.py: schema_migrations table, applies db/schema.sql once as 000_baseline, then db/migrations/*.sql in order, idempotent. Done: runs twice cleanly on the test DB.
+- [x] 2.2 [P] Test fixtures: connect to TEST_DATABASE_URL, apply migrations, truncate between tests; refuse if it is empty or equals DATABASE_URL. Done: test proving the refusal.
 - [ ] 2.3 [P] repositories/: api_keys.py, rate_limits.py, usage_logs.py implemented; scans.py, webhooks.py, deliveries.py as typed stubs. Done: repository tests pass.
 
 ## Phase 3: Authentication

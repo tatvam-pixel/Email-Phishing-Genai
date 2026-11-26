@@ -1,5 +1,8 @@
 """PhishGuard AI — application factory."""
 
+import hashlib
+import hmac
+import os
 import re
 import secrets
 
@@ -10,8 +13,25 @@ from flask import g, request
 from .config import Config, get_config
 from .errors import STATUS_CODE_MAP, error_response
 
-# Security scheme for OpenAPI; verify callback added in step 3.2
-api_key_auth = APIKeyHeaderAuth()
+# Security scheme for OpenAPI
+api_key_auth = APIKeyHeaderAuth(name="X-API-Key")
+
+
+@api_key_auth.verify_token
+def verify_api_key(token: str) -> bool:
+    """Verify incoming X-API-Key against DEMO_API_KEY_SHA256 in constant time."""
+    expected_hash = os.environ.get("DEMO_API_KEY_SHA256", "")
+    if not token or not expected_hash:
+        return False
+    incoming_hash = hashlib.sha256(token.encode("utf-8")).hexdigest()
+    return hmac.compare_digest(incoming_hash, expected_hash)
+
+
+@api_key_auth.error_processor
+def auth_error_processor(error):
+    """Return standard 401 error envelope on missing or invalid key."""
+    return error_response(401, "Invalid or missing API key.", "unauthorized"), 401
+
 
 _REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
@@ -47,7 +67,8 @@ def create_app(config: Config | None = None) -> APIFlask:
     @app.error_processor
     def process_error(error):
         status = error.status_code
-        code = STATUS_CODE_MAP.get(status, "internal_error")
+        custom_code = (getattr(error, "extra_data", None) or {}).get("code")
+        code = custom_code or STATUS_CODE_MAP.get(status, "internal_error")
         if status >= 500:
             message = "An unexpected error occurred."
         else:
@@ -66,7 +87,11 @@ def create_app(config: Config | None = None) -> APIFlask:
 
     # ---- Blueprints ---------------------------------------------------------
     from .routes.health import health_bp
+    from .routes.scan import scan_bp
+    from .routes.ui import ui_bp
 
     app.register_blueprint(health_bp)
+    app.register_blueprint(scan_bp)
+    app.register_blueprint(ui_bp)
 
     return app
