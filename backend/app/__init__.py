@@ -1,5 +1,6 @@
 """PhishGuard AI — application factory."""
 
+from datetime import timedelta
 import hashlib
 import hmac
 import os
@@ -10,10 +11,10 @@ from apiflask import APIFlask
 from apiflask.security import APIKeyHeaderAuth
 from flask import g, request
 
-from .config import Config, get_config
+from .config import Config, get_config, is_secure_cookie_required
 from .errors import STATUS_CODE_MAP, error_response
 
-# Security scheme for OpenAPI
+# Security scheme for backward compatibility and OpenAPI
 api_key_auth = APIKeyHeaderAuth(name="X-API-Key")
 
 
@@ -49,6 +50,46 @@ def create_app(config: Config | None = None) -> APIFlask:
         config = get_config()
     app.config["ENV_NAME"] = config.ENV
 
+    # ---- Session Configuration ----------------------------------------------
+    secure_cookies = is_secure_cookie_required(config)
+
+    session_secret = (
+        os.environ.get("SESSION_SECRET")
+        or os.environ.get("SECRET_KEY")
+        or config.SESSION_SECRET
+    )
+    if not session_secret:
+        if secure_cookies:
+            raise RuntimeError(
+                "SESSION_SECRET environment variable is required in production and secure deployments"
+            )
+        session_secret = "dev-insecure-session-secret-change-in-prod"
+
+    app.secret_key = session_secret
+    app.config.update(
+        SESSION_COOKIE_HTTPONLY=True,
+        SESSION_COOKIE_SECURE=secure_cookies,
+        SESSION_COOKIE_SAMESITE="Lax",
+        SESSION_COOKIE_NAME="session",
+        PERMANENT_SESSION_LIFETIME=timedelta(hours=24),
+    )
+
+    # ---- OpenAPI Security Schemes -------------------------------------------
+    app.security_schemes = {
+        "ApiKeyAuth": {
+            "type": "apiKey",
+            "in": "header",
+            "name": "X-API-Key",
+            "description": "API key for programmatic access",
+        },
+        "CookieAuth": {
+            "type": "apiKey",
+            "in": "cookie",
+            "name": "session",
+            "description": "Authenticated browser session cookie",
+        },
+    }
+
     # ---- Request ID --------------------------------------------------------
     @app.before_request
     def set_request_id():
@@ -78,19 +119,20 @@ def create_app(config: Config | None = None) -> APIFlask:
             body["error"]["detail"] = error.detail
         return body, status, error.headers if error.headers else {}
 
-    # Non-HTTP exceptions (RuntimeError, etc.) — HTTPException is handled
-    # by APIFlask's own handler which calls error_processor above.
+    # Non-HTTP exceptions (RuntimeError, etc.)
     @app.errorhandler(Exception)
     def handle_unexpected(exc):
         body = error_response(500, "An unexpected error occurred.")
         return body, 500
 
     # ---- Blueprints ---------------------------------------------------------
+    from .routes.auth import auth_bp
     from .routes.health import health_bp
     from .routes.scan import scan_bp
     from .routes.ui import ui_bp
 
     app.register_blueprint(health_bp)
+    app.register_blueprint(auth_bp)
     app.register_blueprint(scan_bp)
     app.register_blueprint(ui_bp)
 

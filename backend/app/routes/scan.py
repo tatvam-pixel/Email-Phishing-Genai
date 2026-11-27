@@ -1,5 +1,6 @@
 """Scan API route per Lite specifications."""
 
+import functools
 import hashlib
 import hmac
 import os
@@ -8,8 +9,9 @@ from typing import Any
 
 from apiflask import APIBlueprint, Schema, abort
 from apiflask.fields import Boolean, Float, Integer, List, Nested, String
+from flask import g, request, session
 
-from .. import api_key_auth
+from ..csrf import validate_request_csrf
 from ..errors import error_response
 from ..scoring.aggregator import aggregate_scan_result
 from ..services.gemini_service import explain_scan
@@ -18,6 +20,55 @@ from ..services.url_features import extract_features
 from ..services.url_normalizer import InvalidUrlError, normalize_url
 
 scan_bp = APIBlueprint("scan", __name__, tag="Scan")
+
+
+# -----------------------------------------------------------------------------
+# Dual Authentication Decorator (Independent Paths)
+# -----------------------------------------------------------------------------
+def dual_auth_required(fn):
+    """Enforce independent dual authentication.
+
+    - Path A: If 'X-API-Key' is present, validate API key in constant time.
+      Invalid credentials return 401 with NO fallback to session.
+      Valid API key explicitly bypasses CSRF.
+    - Path B: If 'X-API-Key' is not present, require an authenticated session.
+      Invalid or missing session returns 401.
+      Session-authenticated requests MUST pass CSRF validation.
+    """
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        has_api_key = "X-API-Key" in request.headers
+
+        if has_api_key:
+            raw_key = request.headers.get("X-API-Key", "")
+            expected_hash = os.environ.get("DEMO_API_KEY_SHA256", "")
+            if not raw_key or not expected_hash:
+                return error_response(401, "Invalid or missing API key.", "unauthorized"), 401
+
+            incoming_hash = hashlib.sha256(raw_key.encode("utf-8")).hexdigest()
+            if not hmac.compare_digest(incoming_hash, expected_hash):
+                return error_response(401, "Invalid or missing API key.", "unauthorized"), 401
+
+            # Valid API key established — bypass CSRF
+            g.auth_type = "api_key"
+            g.auth_user = None
+            return fn(*args, **kwargs)
+
+        # Session path
+        user = session.get("user")
+        if not user or not isinstance(user, dict) or not user.get("sub"):
+            return error_response(401, "Invalid or missing API key.", "unauthorized"), 401
+
+        # Enforce CSRF for session-authenticated state-changing requests
+        if request.method in ("POST", "PUT", "PATCH", "DELETE"):
+            if not validate_request_csrf():
+                return error_response(403, "Invalid or missing CSRF token.", "forbidden"), 403
+
+        g.auth_type = "session"
+        g.auth_user = user
+        return fn(*args, **kwargs)
+
+    return wrapper
 
 
 # -----------------------------------------------------------------------------
@@ -96,19 +147,21 @@ class StandardErrorSchema(Schema):
 # Route Handler
 # -----------------------------------------------------------------------------
 @scan_bp.post("/api/v1/scan/url")
+@dual_auth_required
 @scan_bp.input(ScanInputSchema, arg_name="data")
 @scan_bp.output(ScanResponseSchema, status_code=200)
-@scan_bp.auth_required(api_key_auth)
 @scan_bp.doc(
     summary="Analyze a URL for phishing threats",
     description=(
         "Scans a submitted URL against structural threat indicators (rules U01-U12, N01), "
-        "determines the risk score and classification, and returns an AI explanation powered by Gemini."
+        "determines the risk score and classification, and returns an AI explanation powered by Gemini. "
+        "Supports dual independent authentication: API key via X-API-Key header or authenticated browser session with CSRF."
     ),
-    security="ApiKeyAuth",
+    security=[{"ApiKeyAuth": []}, {"CookieAuth": []}],
     responses={
         200: "Scan completed successfully",
-        401: "Unauthorized - invalid or missing X-API-Key",
+        401: "Unauthorized - invalid or missing credentials",
+        403: "Forbidden - invalid or missing CSRF token for session authentication",
         422: "Unprocessable Entity - invalid or malformed URL",
     },
 )

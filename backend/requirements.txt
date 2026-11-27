@@ -4,3 +4,4 @@ sqlalchemy==2.1.9
 psycopg[binary]==3.3.9
 google-genai==3.6.1
 tldextract==5.4.0
+authlib==1.5.2
