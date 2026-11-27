@@ -7,3 +7,5 @@ ml/data/
 .vercel/
 .env.*
 !.env.example
+.vercel
+.env*
